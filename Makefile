@@ -12,7 +12,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/blue-merle
 	SECTION:=utils
 	CATEGORY:=Utilities
-	EXTRA_DEPENDS:=luci-base, coreutils-shred, python3-light
+	EXTRA_DEPENDS:=luci-base, coreutils-shred, python3-pyserial
 	TITLE:=Anonymity Enhancements for GL-XE3000 Puli AX
 endef
 

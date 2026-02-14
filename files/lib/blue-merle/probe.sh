@@ -2,30 +2,8 @@
 
 # blue-merle probe library for GL-XE3000 (Puli AX)
 
-BM_MHI_DEV="/dev/mhi_DUN"
-
 bm_log() {
     logger -p notice -t blue-merle "$1"
-}
-
-# Send an AT command directly to the modem via /dev/mhi_DUN.
-# Used for EGMR commands that gl_modem doesn't handle.
-bm_at_direct() {
-    local cmd="$1"
-    exec 3<>"$BM_MHI_DEV"
-    printf '%s\r' "$cmd" >&3
-    local line="" result="" i=0
-    while [ $i -lt 10 ]; do
-        read -r -t 2 line <&3 || break
-        result="$result$line
-"
-        case "$line" in
-            *OK*|*ERROR*) break;;
-        esac
-        i=$((i + 1))
-    done
-    exec 3>&-
-    echo "$result"
 }
 
 # Check if IMEI writes work on this modem (RM520N-GL support is firmware-dependent)
@@ -37,15 +15,26 @@ bm_can_write_imei() {
         return $?
     fi
 
-    if [ ! -c "$BM_MHI_DEV" ]; then
+    if [ ! -c /dev/mhi_DUN ]; then
         echo 0 > "$cache"
-        bm_log "IMEI write not supported: $BM_MHI_DEV not found"
+        bm_log "IMEI write not supported: /dev/mhi_DUN not found"
         return 1
     fi
 
     local resp
-    resp=$(bm_at_direct 'AT+EGMR=0,7')
-    if echo "$resp" | grep -q "[0-9]"; then
+    resp=$(python3 -c "
+import serial
+try:
+    with serial.Serial('/dev/mhi_DUN', 9600, timeout=3, exclusive=True) as ser:
+        ser.write(b'AT+EGMR=0,7\r')
+        output = ser.read(64)
+        if b'EGMR' in output or b'OK' in output:
+            print('OK')
+except:
+    pass
+" 2>/dev/null)
+
+    if [ "$resp" = "OK" ]; then
         echo 1 > "$cache"
         return 0
     fi

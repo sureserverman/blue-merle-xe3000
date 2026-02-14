@@ -60,7 +60,7 @@ GENERATE_IMEI() {
 SET_IMEI() {
     local imei="$1"
     if [ ${#imei} -eq 14 ]; then
-        bm_at_direct "AT+EGMR=1,7,\"${imei}\""
+        python3 /lib/blue-merle/imei_generate.py -s "$imei"
     else
         echo "IMEI is ${#imei} not 14 characters long"
         return 1
