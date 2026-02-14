@@ -16,7 +16,7 @@ jobs:
     name: Build Package (GL-XE3000)
     runs-on: ubuntu-latest
     env:
-      owrt-package: blue-merle
+      owrt_package: blue-merle
       SDK_URL: "https://downloads.openwrt.org/releases/23.05.0/targets/mediatek/filogic/openwrt-sdk-23.05.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +29,9 @@ jobs:
         run: |
           SDK_DIR=$(ls sdk/ | head -1)
           cd "sdk/${SDK_DIR}"
-          mkdir "package/${owrt-package}"
-          ln -s "${GITHUB_WORKSPACE}/Makefile" "package/${owrt-package}/"
-          ln -s "${GITHUB_WORKSPACE}/files" "package/${owrt-package}/"
+          mkdir "package/${owrt_package}"
+          ln -s "${GITHUB_WORKSPACE}/Makefile" "package/${owrt_package}/"
+          ln -s "${GITHUB_WORKSPACE}/files" "package/${owrt_package}/"
       - name: Build
         run: |
           SDK_DIR=$(ls sdk/ | head -1)
@@ -39,13 +39,13 @@ jobs:
           scripts/feeds update packages >/dev/null
           echo "CONFIG_SIGNED_PACKAGES=n" > .config
           make defconfig
-          make -j$(nproc) V=s "package/${owrt-package}/compile"
+          make -j$(nproc) V=s "package/${owrt_package}/compile"
           make -j1 V=s package/index
       - name: Prepare artifact
         run: |
           SDK_DIR=$(ls sdk/ | head -1)
           mkdir package-output
-          cp sdk/"${SDK_DIR}"/bin/packages/aarch64_cortex-a53/base/"${owrt-package}"*.ipk package-output/
+          cp sdk/"${SDK_DIR}"/bin/packages/aarch64_cortex-a53/base/"${owrt_package}"*.ipk package-output/
       - uses: actions/upload-artifact@v4
         with:
           name: blue-merle-GL-XE3000-${{ github.sha }}
