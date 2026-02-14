@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=blue-merle
-PKG_VERSION:=2.0.5
+PKG_VERSION:=3.0.0
 PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_MAINTAINER:=Matthias <matthias@srlabs.de>
@@ -12,12 +12,15 @@ include $(INCLUDE_DIR)/package.mk
 define Package/blue-merle
 	SECTION:=utils
 	CATEGORY:=Utilities
-	EXTRA_DEPENDS:=luci-base, gl-sdk4-mcu, coreutils-shred, python3-pyserial
-	TITLE:=Anonymity Enhancements for GL-E750 Mudi
+	EXTRA_DEPENDS:=luci-base, coreutils-shred, python3-light
+	TITLE:=Anonymity Enhancements for GL-XE3000 Puli AX
 endef
 
 define Package/blue-merle/description
-	The blue-merle package enhances anonymity and reduces forensic traceability of the GL-E750 Mudi 4G mobile wi-fi router
+	The blue-merle package enhances anonymity and reduces forensic
+	traceability of the GL-XE3000 Puli AX 5G mobile router.
+	Features: MAC/BSSID randomization on every boot, volatile client
+	database, IMEI management (if supported by modem firmware).
 endef
 
 define Build/Configure
@@ -37,69 +40,50 @@ endef
 
 define Package/blue-merle/preinst
 	#!/bin/sh
-	[ -n "$${IPKG_INSTROOT}" ] && exit 0	# if run within buildroot exit
-	
-	ABORT_GLVERSION () {
-		echo
-		if [ -f "/tmp/sysinfo/model" ] && [ -f "/etc/glversion" ]; then
-			echo "You have a `cat /tmp/sysinfo/model`, running firmware version `cat /etc/glversion`."
-		fi
-		echo "blue-merle has only been tested with GL-E750 Mudi Versions up to 4.3.26"
-		echo "The device or firmware version you are using have not been verified to work with blue-merle."
-		echo -n "Would you like to continue on your own risk? (y/N): "
-		read answer
-		case $$answer in
-				y*) answer=0;;
-				y*) answer=0;;
-				*) answer=1;;
-		esac
-		if [[ "$$answer" -eq 0 ]]; then
-			exit 0
-		else
-			exit 1
-		fi
-	}
+	[ -n "$${IPKG_INSTROOT}" ] && exit 0
 
-	if grep -q "GL.iNet GL-E750" /proc/cpuinfo; then
-	    GL_VERSION=$$(cat /etc/glversion)
-	    case $$GL_VERSION in
-		4.3.26)
-		    echo Version $$GL_VERSION is supported
-		    exit 0
-		    ;;
-		4.*)
-	            echo Version $$GL_VERSION is *probably* supported
-	            ABORT_GLVERSION
-	            ;;
-	        *)
-	            echo Unknown version $$GL_VERSION
-	            ABORT_GLVERSION
-	            ;;
-        esac
-        CHECK_MCUVERSION
-	else
-		ABORT_GLVERSION
-	fi
+	BM_DEVICE=""
+	[ -f /tmp/sysinfo/model ] && BM_DEVICE=$$(cat /tmp/sysinfo/model)
 
-    # Our volatile-mac service gets started during the installation
-    # but it modifies the client database held by the gl_clients process.
-    # So we stop that process now, have the database put onto volatile storage
-    # and start the service after installation
-    /etc/init.d/gl_clients stop
+	case "$$BM_DEVICE" in
+		*GL-XE3000*)
+			echo "Detected GL-XE3000 (Puli AX)"
+			;;
+		*)
+			echo
+			echo "This package is built for GL-XE3000 (Puli AX)."
+			if [ -n "$$BM_DEVICE" ]; then
+				echo "Your device: $$BM_DEVICE"
+			fi
+			echo -n "Install anyway? (y/N): "
+			read answer
+			case $$answer in
+				y*|Y*) ;;
+				*) exit 1;;
+			esac
+			;;
+	esac
+
+	# Stop gl_clients before we move its database to volatile storage
+	[ -x /etc/init.d/gl_clients ] && /etc/init.d/gl_clients stop
 endef
 
 define Package/blue-merle/postinst
 	#!/bin/sh
-	uci set switch-button.@main[0].func='sim'
-	uci commit switch-button
+	# Configure switch button if the device has one
+	if uci -q get switch-button.@main[0] >/dev/null 2>&1; then
+		uci set switch-button.@main[0].func='sim'
+		uci commit switch-button
+	fi
 
-	/etc/init.d/gl_clients start
-
-	echo {\"msg\": \"Successfully installed Blue Merle\"} > /dev/ttyS0
+	[ -x /etc/init.d/gl_clients ] && /etc/init.d/gl_clients start
 endef
 
 define Package/blue-merle/postrm
 	#!/bin/sh
-	uci set switch-button.@main[0].func='tor'
+	if uci -q get switch-button.@main[0] >/dev/null 2>&1; then
+		uci set switch-button.@main[0].func='tor'
+		uci commit switch-button
+	fi
 endef
 $(eval $(call BuildPackage,$(PKG_NAME)))

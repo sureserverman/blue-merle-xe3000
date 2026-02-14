@@ -1,146 +1,123 @@
 #!/bin/sh
 
+# blue-merle CLI for GL-XE3000 (Puli AX)
+
 . /lib/blue-merle/functions.sh
 
-if [ ! -c "/dev/ttyUSB3" ]; then
-	echo "Error: /dev/ttyUSB3 does not exist."
-	echo "Please reboot and contact the maintainer if the problem persists."
-	exit 1;
+# Check IMEI write support on this RM520N-GL
+imei_supported=0
+if bm_can_write_imei; then
+	imei_supported=1
+else
+	echo "NOTE: IMEI change is not supported on this modem firmware."
+	echo "      IMEI/IMSI read, RF off, and shutdown are still available."
+	echo
 fi
 
 echo -n "Swap SIM card and update IMEI? (Y/n): "
 read answer
 case $answer in
-	n*) answer=0;;
-	N*) answer=0;;
-	*) answer=1;;
+	n*|N*) exit 0;;
 esac
-if [[ "$answer" -eq 0 ]]; then
-	exit 1;
-fi
-
-
-echo "Disabling the ME from both transmitting and receiving RF signals..."
 
 old_imei=$(READ_IMEI)
 old_imsi=$(READ_IMSI)
 
+echo "Disabling RF..."
 answer=1
-while [[ "$answer" -eq 1 ]]; do
+while [ "$answer" -eq 1 ]; do
 	gl_modem AT AT+CFUN=4 | grep -q OK
-	if [[ $? -eq 1 ]]; then
+	if [ $? -ne 0 ]; then
 		echo -n "...failed. Try again? (Y/n): "
 		read answer
 		case $answer in
-			n*) answer=0;;
-			N*) answer=0;;
+			n*|N*) exit 1;;
 			*) answer=1;;
 		esac
-		if [[ $answer -eq 0 ]]; then
-			exit 1
-		fi
 	else
 		answer=0
 	fi
 done
 
-## We have just disabled the modem so it should not log on to any network.
-## We set a random IMEI now only to have it overwritten very soon after
-## the SIM card has been replaced. We intend to prevent an accidential
-## leak of the new SIM's IMSI with the old IMEI just in case the modem
-## accidentally tried to log in to the network.
-python3 /lib/blue-merle/imei_generate.py -r
+# Set interim random IMEI to prevent IMSI leak under old IMEI
+if [ "$imei_supported" -eq 1 ]; then
+	python3 /lib/blue-merle/imei_generate.py -r
+fi
 
-
-echo -n "Please now replace the SIM card and press any key to continue. "
+echo -n "Replace the SIM card now, then press Enter. "
 read answer
 
 leak=0
-
-until gl_modem AT AT+CFUN=0 | grep -q OK
-do
+until gl_modem AT AT+CFUN=0 | grep -q OK; do
 	sleep 1
 	echo "CFUN=0 failed. Trying again."
 done
 
-until gl_modem AT AT+CFUN=4 | grep -q OK
-do
+until gl_modem AT AT+CFUN=4 | grep -q OK; do
 	leak=1
 	echo "CFUN=4 failed. Trying again."
 done
 
-if [[ $leak -eq 1 ]]; then
+if [ $leak -eq 1 ]; then
 	echo
 	echo "WARNING: Reset took longer than expected."
 	echo
 fi
 
 sleep 1
-
 new_imsi=$(READ_IMSI)
 
-if [[ "$old_imsi" == "$new_imsi" ]]; then
+if [ "$old_imsi" = "$new_imsi" ]; then
 	echo
 	echo "WARNING: Old IMSI equals new IMSI."
 	echo
 fi
 
-echo -n "Would you like to set a random (r) or deterministic (d) IMEI? (R/d): " 
-read answer                                      
-case $answer in                                  
-        d*) answer=0;;
-        D*) answer=0;;
-        *) answer=1;;
-esac                                            
-if [[ "$answer" -eq 1 ]]; then                  
-	python3 /lib/blue-merle/imei_generate.py -r
-else
-	python3 /lib/blue-merle/imei_generate.py -d
-fi   
+if [ "$imei_supported" -eq 1 ]; then
+	echo -n "Random (r) or deterministic (d) IMEI? (R/d): "
+	read answer
+	case $answer in
+		d*|D*) python3 /lib/blue-merle/imei_generate.py -d;;
+		*)     python3 /lib/blue-merle/imei_generate.py -r;;
+	esac
 
-new_imei=$(READ_IMEI)
-
-if [[ "$old_imei" == "$new_imei" ]]; then
-	echo
-	echo "WARNING: Old IMEI equals new IMEI."
-	echo
+	new_imei=$(READ_IMEI)
+	if [ "$old_imei" = "$new_imei" ]; then
+		echo "WARNING: Old IMEI equals new IMEI."
+	else
+		mkdir -p /tmp/modem.1-1.2
+		echo "$new_imei" > /tmp/modem.1-1.2/modem-imei
+		if [ -d /root/esim ]; then
+			echo "$new_imei" > /root/esim/imei
+			shred -u /root/esim/log.txt 2>/dev/null
+		fi
+	fi
 else
-	mkdir -p /tmp/modem.1-1.2
-	echo "$new_imei" > /tmp/modem.1-1.2/modem-imei
-	# prevent imei leak via the LPA
-        echo "$new_imei" > /root/esim/imei
-        shred -u /root/esim/log.txt # unclear if the imei/imsi will be loged here, just a precaution
+	echo "Skipping IMEI change (not supported on this modem)."
 fi
 
-echo "You should now reset the modem or shutdown the device."
-echo "For extra privacy, you should shutdown the device and change your location."
 echo
-echo -n "Would you like to shutdown the device (s) or reset the modem (m)? (S/m): "
+echo "For extra privacy, shutdown and change location before booting."
+echo -n "Shutdown (s) or reset modem (m)? (S/m): "
 read answer
 case $answer in
-	m*) answer=0;;
-	M*) answer=0;;
-	*) answer=1;;
+	m*|M*)
+		echo "Resetting modem..."
+		until gl_modem AT AT+QPOWD | grep -q OK; do
+			echo "Reset failed. Trying again."
+			sleep 1
+		done
+		time_start=$(date +%s)
+		until READ_IMSI >/dev/null 2>&1; do
+			time_now=$(date +%s)
+			printf "Waiting for reset... (%ds/30s)\r" "$((time_now-time_start))"
+			sleep 1
+		done
+		echo
+		echo "Done."
+		;;
+	*)
+		echo "Shutting down..."
+		/sbin/poweroff
+		;;
 esac
-if [[ "$answer" -eq 1 ]]; then
-    echo '{ "msg": "Shutting down..." }' > /dev/ttyS0
-    echo '{ "poweroff": "1" }' > /dev/ttyS0
-else
-	echo "Resetting modem..."
-	until gl_modem AT AT+QPOWD | grep -q OK
-	do
-		echo "Resetting modem failed. Trying again."
-		sleep 1
-	done 
-	
-	time_start=$(date +%s)
-	until imsi=$(gl_modem AT AT+CIMI | grep -w -E "[0-9]{6,15}")
-	do
-		time_now=$(date +%s)
-		echo -ne "Waiting for reset to complete. ($(($time_now-$time_start))s/30s)\r"
-		sleep 1
-	done
-	echo
-	echo "FIN"
-fi
-	

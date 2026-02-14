@@ -27,4 +27,3 @@ start() {
 stop() {
 	shred /etc/oui-tertf/client.db ||  rm -f /etc/oui-tertf/client.db
 }
-

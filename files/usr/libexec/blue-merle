@@ -1,49 +1,47 @@
 #!/bin/sh
 
+# blue-merle LuCI backend for GL-XE3000 (Puli AX)
+
 . /lib/blue-merle/functions.sh
 
+logger -p notice -t blue-merle-libexec "Libexec $1"
 
-show_message() {
-    # There is mcu_send_message() in /lib/functions/gl_util.sh but we don't want to load the file, thinking that it will take too long
-    echo {\"msg\": \"$1\"} > /dev/ttyS0
-}
+if [ "$1" = "read-imei" ]; then
+    echo -n "$(READ_IMEI)"
 
-
-logger -p notice -t blue-merle-libexec  "Libexec $1"
-
-if [ "$1" == "read-imei" ]; then
-    imei="$(READ_IMEI)"
-    echo -n  $imei
-    show_message "My IMEI: $imei"
-
-elif [ "$1" == "read-imsi" ]; then
+elif [ "$1" = "read-imsi" ]; then
     imsi="$(READ_IMSI)"
-    if [ "x$imsi" == "x" ]; then
-        echo "No IMSI found $imsi" >&2
+    if [ -z "$imsi" ]; then
+        echo "No IMSI found" >&2
         exit 1
+    fi
+    echo -n "$imsi"
+
+elif [ "$1" = "random-imei" ]; then
+    if bm_can_write_imei; then
+        flock -n /tmp/blue-merle-imei-generate.lock timeout 15 /lib/blue-merle/imei_generate.py --random
+        READ_IMEI
     else
-        echo -n  $imsi
-        show_message "My IMSI: $imsi"
+        echo "IMEI change not supported on this modem" >&2
+        exit 2
     fi
 
-elif [ "$1" == "random-imei" ]; then
-    flock -n /tmp/blue-merle-imei-generate.lock  timeout 15  /lib/blue-merle/imei_generate.py --random
-    READ_IMEI
+elif [ "$1" = "can-write-imei" ]; then
+    if bm_can_write_imei; then
+        echo -n "1"
+    else
+        echo -n "0"
+    fi
 
-elif [ "$1" == "shutdown-modem" ]; then
+elif [ "$1" = "shutdown-modem" ]; then
     exec gl_modem AT AT+CFUN=4
 
-elif [ "$1" == "shutdown" ]; then
-    show_message "Shutting down..."
-    echo -n "Shutting down"
+elif [ "$1" = "shutdown" ]; then
     logger -p notice -t blue-merle-libexec "Shutting down"
-    echo '{ "poweroff": "1" }' > /dev/ttyS0
+    echo -n "Shutting down"
+    /sbin/poweroff
 
-elif [ "$1" == "write-imei" ]; then
-    new_imei=$2
-    echo -n  { "action": "write" }
 else
-    echo -n   '{"msg":"Hello, World!"}'
-    #echo 'foo'>&2
-    echo 0
+    echo -n '{"msg":"unknown command"}'
+    exit 1
 fi

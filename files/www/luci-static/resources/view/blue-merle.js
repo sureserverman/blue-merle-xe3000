@@ -102,6 +102,8 @@ var languages = ['en'];
 
 var currentDisplayMode = 'available', currentDisplayRows = [];
 
+// Track whether the modem supports IMEI writes
+var canWriteIMEI = false;
 
 
 function handleReset(ev)
@@ -149,6 +151,20 @@ function randomIMEI() {
 
 function readIMSI() {
     return callBlueMerle("read-imsi");
+}
+
+function checkCanWriteIMEI() {
+    return callBlueMerle("can-write-imei").then(
+        function(res) {
+            canWriteIMEI = (res.trim() === "1");
+            return canWriteIMEI;
+        }
+    ).catch(
+        function(err) {
+            canWriteIMEI = false;
+            return false;
+        }
+    );
 }
 
 function handleConfig(ev)
@@ -285,6 +301,28 @@ function handleSimSwap(ev) {
                     res
                 )
             );
+
+            if (!canWriteIMEI) {
+                // IMEI change not supported — skip random-imei, go straight to shutdown prompt
+                document.getElementById(spinnerID).style = "display:none";
+                dlg.appendChild(
+                    E('div', { 'class': 'text'},
+                      [
+                        E('p', { 'class': 'text'},
+                            _("IMEI change is not supported on this modem. Modem RF is now off.")
+                        ),
+                        E('p', { 'class': 'text'},
+                            _("Please shutdown the device, swap the SIM, then go to another place before booting")
+                        ),
+    			    	E('button', { 'class': 'btn cbi-button-positive', 'click': handleShutdown, 'disabled': isReadonlyView },
+    				    	[ _('Shutdown…') ]
+                        )
+                      ]
+                    )
+                );
+                return;
+            }
+
             dlg.appendChild(
                 E('p', { 'class': 'text'},
                     _("Generating Random IMEI")
@@ -351,6 +389,7 @@ return view.extend({
 
         const imeiInputID = 'imei-input';
         const imsiInputID = 'imsi-input';
+        const imeiStatusID = 'imei-status';
 
 		var view = E([], [
 			E('style', { 'type': 'text/css' }, [ css ]),
@@ -375,6 +414,8 @@ return view.extend({
 					])
 				]),
 			]),
+
+			E('div', { 'id': imeiStatusID }),
 
 			E('div', {}, [
 				E('label', {}, _('Actions') + ':'), ' ',
@@ -410,6 +451,19 @@ return view.extend({
 		        e.value = "No IMSI found";
 		    }
 		)
+
+		checkCanWriteIMEI().then(
+		    function(supported) {
+		        const e = document.getElementById(imeiStatusID);
+		        if (!supported) {
+		            e.appendChild(
+		                E('p', { 'style': 'color: #c44; font-weight: bold;' },
+		                    _('Note: IMEI change is not supported on this modem. RF off and shutdown are still available.')
+		                )
+		            );
+		        }
+		    }
+		);
 
 		return view;
 	},
