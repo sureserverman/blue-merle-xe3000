@@ -10,12 +10,12 @@ bm_log "Stage 2 - resetting modem"
 sim_switch on
 
 leak=0
-until gl_modem AT AT+CFUN=0 | grep -q OK; do
+until gl_modem -B $BM_MODEM_BUS AT AT+CFUN=0 | grep -q OK; do
 	bm_log "CFUN=0 failed, retrying"
 	sleep 1
 done
 
-until gl_modem AT AT+CFUN=4 | grep -q OK; do
+until gl_modem -B $BM_MODEM_BUS AT AT+CFUN=4 | grep -q OK; do
 	leak=1
 	bm_log "CFUN=4 failed, retrying"
 	sleep 1

@@ -26,13 +26,13 @@ RANDOMIZE_MACADDR () {
 }
 
 READ_ICCID() {
-    gl_modem AT AT+CCID
+    gl_modem -B $BM_MODEM_BUS AT AT+CCID
 }
 
 
 READ_IMEI() {
     local imei
-    imei=$(gl_modem AT AT+GSN | grep -w -E "[0-9]{14,15}")
+    imei=$(gl_modem -B $BM_MODEM_BUS AT AT+GSN | grep -w -E "[0-9]{14,15}")
     if [ -z "$imei" ]; then
         bm_log "Failed to read IMEI"
         return 1
@@ -42,7 +42,7 @@ READ_IMEI() {
 
 READ_IMSI() {
     local imsi
-    imsi=$(gl_modem AT AT+CIMI | grep -w -E "[0-9]{6,15}")
+    imsi=$(gl_modem -B $BM_MODEM_BUS AT AT+CIMI | grep -w -E "[0-9]{6,15}")
     if [ -z "$imsi" ]; then
         bm_log "Failed to read IMSI"
         return 1

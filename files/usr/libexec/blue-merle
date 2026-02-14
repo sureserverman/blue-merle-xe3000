@@ -34,7 +34,7 @@ elif [ "$1" = "can-write-imei" ]; then
     fi
 
 elif [ "$1" = "shutdown-modem" ]; then
-    exec gl_modem AT AT+CFUN=4
+    exec gl_modem -B $BM_MODEM_BUS AT AT+CFUN=4
 
 elif [ "$1" = "shutdown" ]; then
     logger -p notice -t blue-merle-libexec "Shutting down"

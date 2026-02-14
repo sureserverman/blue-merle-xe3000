@@ -2,6 +2,8 @@
 
 # blue-merle probe library for GL-XE3000 (Puli AX)
 
+BM_MODEM_BUS="1-1.2"
+
 bm_log() {
     logger -p notice -t blue-merle "$1"
 }

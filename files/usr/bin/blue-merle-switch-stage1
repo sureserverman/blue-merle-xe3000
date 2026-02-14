@@ -30,7 +30,7 @@ old_imsi=$(READ_IMSI)
 
 answer=1
 while [ "$answer" -eq 1 ]; do
-	gl_modem AT AT+CFUN=4 | grep -q OK
+	gl_modem -B $BM_MODEM_BUS AT AT+CFUN=4 | grep -q OK
 	if [ $? -ne 0 ]; then
 		bm_log "RF disable failed, retrying"
 		CHECK_ABORT

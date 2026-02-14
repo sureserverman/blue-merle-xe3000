@@ -26,7 +26,7 @@ old_imsi=$(READ_IMSI)
 echo "Disabling RF..."
 answer=1
 while [ "$answer" -eq 1 ]; do
-	gl_modem AT AT+CFUN=4 | grep -q OK
+	gl_modem -B $BM_MODEM_BUS AT AT+CFUN=4 | grep -q OK
 	if [ $? -ne 0 ]; then
 		echo -n "...failed. Try again? (Y/n): "
 		read answer
@@ -48,12 +48,12 @@ echo -n "Replace the SIM card now, then press Enter. "
 read answer
 
 leak=0
-until gl_modem AT AT+CFUN=0 | grep -q OK; do
+until gl_modem -B $BM_MODEM_BUS AT AT+CFUN=0 | grep -q OK; do
 	sleep 1
 	echo "CFUN=0 failed. Trying again."
 done
 
-until gl_modem AT AT+CFUN=4 | grep -q OK; do
+until gl_modem -B $BM_MODEM_BUS AT AT+CFUN=4 | grep -q OK; do
 	leak=1
 	echo "CFUN=4 failed. Trying again."
 done
@@ -103,7 +103,7 @@ read answer
 case $answer in
 	m*|M*)
 		echo "Resetting modem..."
-		until gl_modem AT AT+QPOWD | grep -q OK; do
+		until gl_modem -B $BM_MODEM_BUS AT AT+QPOWD | grep -q OK; do
 			echo "Reset failed. Trying again."
 			sleep 1
 		done
