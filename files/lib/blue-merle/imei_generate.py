@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """IMEI generator for GL-XE3000 (Puli AX).
 
-Uses gl_modem for all modem communication. No raw serial.
+Uses gl_modem for general AT commands, /dev/mhi_DUN for EGMR.
 """
+import os
+import time
 import random
 import string
 import argparse
@@ -40,6 +42,7 @@ imei_prefix = ["35674108", "35290611", "35397710", "35323210", "35384110",
 verbose = False
 mode = None
 TIMEOUT = 5
+MHI_DEV = '/dev/mhi_DUN'
 
 
 def _gl_modem_at(cmd):
@@ -53,6 +56,22 @@ def _gl_modem_at(cmd):
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         if verbose:
             print(f"gl_modem error: {e}")
+        return ""
+
+
+def _at_direct(cmd):
+    """Send an AT command directly to the modem via /dev/mhi_DUN.
+    Used for EGMR commands that gl_modem doesn't handle."""
+    try:
+        fd = os.open(MHI_DEV, os.O_RDWR | os.O_NOCTTY)
+        os.write(fd, f'{cmd}\r'.encode())
+        time.sleep(1)
+        resp = os.read(fd, 1024)
+        os.close(fd)
+        return resp.decode(errors='replace')
+    except OSError as e:
+        if verbose:
+            print(f"Direct AT error: {e}")
         return ""
 
 
@@ -74,7 +93,7 @@ def get_imei():
 
 def set_imei(imei):
     cmd_str = f'AT+EGMR=1,7,"{imei}"'
-    output = _gl_modem_at(cmd_str)
+    output = _at_direct(cmd_str)
     if verbose:
         print(f"{cmd_str} output: {output}")
 
