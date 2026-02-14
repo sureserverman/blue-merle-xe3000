@@ -17,8 +17,8 @@ bm_can_write_imei() {
     fi
 
     local resp
-    resp=$(gl_modem AT 'AT+EGMR=?' 2>/dev/null)
-    if echo "$resp" | grep -q "OK"; then
+    resp=$(gl_modem AT 'AT+EGMR=0,7' 2>/dev/null)
+    if echo "$resp" | grep -q "[0-9]"; then
         echo 1 > "$cache"
         return 0
     fi
